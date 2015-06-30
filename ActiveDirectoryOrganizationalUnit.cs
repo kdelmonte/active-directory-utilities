@@ -9,7 +9,7 @@ namespace ActiveDirectoryUtilities
         public string Name;
         // Any child OUs
         public List<ActiveDirectoryOrganizationalUnit> OrganizationalUnits = new List<ActiveDirectoryOrganizationalUnit>();
-        // The AD path og the unit
+        // The AD path of the unit
         public string Path;
         // If there are any users of the unit, they would be listed here
         public List<string> Users = new List<string>();
