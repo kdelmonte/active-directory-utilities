@@ -1,7 +1,9 @@
 # active-directory-utilities
+
 Perform common Active Directory tasks easily...
 
 ## Motivation
+
 In .NET projects, the need to perform operations against an Active Directory is very common (i.e, authenticating a user). This library aims to abstract common operations against active directory.
 
 ## Install
@@ -41,6 +43,7 @@ In .NET projects, the need to perform operations against an Active Directory is 
     }
 
 ## API
+
 **Note**: All methods shown in this section also have a static counterpart.
 
 - `bool AuthenticateUser(string userName, string password)` - Authenticates a username/password combination against the specified domain
