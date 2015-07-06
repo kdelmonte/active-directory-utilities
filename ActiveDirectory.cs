@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.DirectoryServices;
+﻿using System.Collections.Generic;
 using System.DirectoryServices.AccountManagement;
 using System.Linq;
 
@@ -8,6 +6,64 @@ namespace ActiveDirectoryUtilities
 {
     public class ActiveDirectory: ActiveDirectoryOrganizationalUnit
     {
+
+        // Name of the ActiveDirectory domain
+        public string DomainName { get; set; }
+
+        // Returns base path of Active directory
+        public string BasePath
+        {
+            get
+            {
+                return GetBasePath(DomainName);
+            }
+        }
+
+        // In order to instantiate this class, the user must pass these required values
+        public ActiveDirectory(string domainName, string operatingUsername, string operatingUserPassword)
+            : base(operatingUsername, operatingUserPassword, GetBasePath(domainName))
+        {
+            DomainName = domainName;
+        }
+
+        // Instance level methods that just call the static methods
+        public bool AuthenticateUser(string userName, string password)
+        {
+            return AuthenticateUser(DomainName, OperatingUsername,
+                OperatingUserPassword, userName, password);
+        }
+
+        public UserPrincipal GetUserByUserName(string userName)
+        {
+            return GetUserByUserName(DomainName, OperatingUsername,
+                OperatingUserPassword, userName);
+        }
+
+        public GroupPrincipal GetGroupByName(string groupName)
+        {
+            return GetGroupByName(DomainName, OperatingUsername,
+                OperatingUserPassword, groupName);
+        }
+
+        public ActiveDirectoryOrganizationalUnit GetOrganizationalUnit(string path = null, bool retrieveDescendants = false,
+            int? depth = null)
+        {
+            return GetOrganizationalUnit(DomainName, OperatingUsername,
+                OperatingUserPassword, path, retrieveDescendants, depth);
+        }
+
+        public List<GroupPrincipal> GetGroupsByName(string filter = "*")
+        {
+            return GetGroupsByName(DomainName, OperatingUsername,
+                OperatingUserPassword, filter);
+        }
+
+        public List<string> GetGroupNames(string filter = "*")
+        {
+            return GetGroupNames(DomainName, OperatingUsername,
+                OperatingUserPassword, filter);
+        }
+
         // Authenticates a username/password combination against the specified domain
         public static bool AuthenticateUser(string domainName, string operatingUsername, string operatingUserPassword, string userName, string password)
         {
@@ -57,38 +113,30 @@ namespace ActiveDirectoryUtilities
         // `path` is the ActiveDirectory path of the organization unit. If none is provided, the whole ActiveDirectory OU will be returned
         // `retrieveDescendants` specifies whether or not the function should retrieve the descendants of the unit
         // `depth` specifies how many levels of descendants the function should retrieve
-        public static ActiveDirectoryOrganizationalUnit GetOrganizationalUnit(string domainName, string userName, string password, 
+        public static ActiveDirectoryOrganizationalUnit GetOrganizationalUnit(string domainName, string operatingUsername, string operatingUserPassword,
             string path = null, bool retrieveDescendants = false, int? depth = null)
         {
+
+            var activeDirectory = new ActiveDirectory(domainName, operatingUsername, operatingUserPassword);
             if (string.IsNullOrWhiteSpace(path))
             {
                 path = null;
             }
-            var rtn = new ActiveDirectoryOrganizationalUnit();
-            var defaultPath = "LDAP://" + domainName;
-            var ldap = new DirectoryEntry(path ?? defaultPath, userName, password);
-            foreach (DirectoryEntry result in ldap.Children)
+            else
             {
-                switch (result.SchemaClassName.ToLower())
+                path = path.Trim('/');
+                if (!path.ToLower().Contains(activeDirectory.BasePath.ToLower()))
                 {
-                    case "user":
-                        if (result.NativeGuid == null) continue;
-                        var flags = (int)result.Properties["userAccountControl"].Value;
-                        if (Convert.ToBoolean(flags & 0x0002)) continue;
-                        rtn.Users.Add(result.Name.Split('=')[1].Trim());
-                        break;
-                    case "organizationalunit":
-                        if (retrieveDescendants && (depth == null || (int)depth >= 0))
-                        {
-                            rtn.OrganizationalUnits.Add(GetOrganizationalUnit(domainName, userName, password, result.Path, true, depth - 1));
-                        }
-                        break;
+                    path = string.Format("{0}/{1}", activeDirectory.BasePath, path);
                 }
             }
-            rtn.Name = ldap.Name.Split('=')[1].Trim();
-            rtn.Path = ldap.Path;
-            ldap.Dispose();
-            return rtn;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return activeDirectory;
+            }
+            return new ActiveDirectoryOrganizationalUnit(operatingUsername, operatingUserPassword,
+                path, retrieveDescendants, depth);
+
         }
 
         // Only gets the names of the domain groups that match the filter passed
@@ -98,67 +146,10 @@ namespace ActiveDirectoryUtilities
             return results.Select(principal => principal.SamAccountName).ToList();
         }
 
-        // Name of the ActiveDirectory domain
-        public string DomainName { get; set; }
-
-        // Username of the user that will be used to perform the operations against ActiveDirectory
-        public string OperatingUsername { get; set; }
-        public string OperatingUserPassword { get; set; }
-
-        // In order to instantiate this class, the user must pass these required values
-        public ActiveDirectory(string domainName, string operatingUsername, string operatingUserPassword)
+        // Build the Active Directory base URL
+        private static string GetBasePath(string domainName)
         {
-            DomainName = domainName;
-            OperatingUsername = operatingUsername;
-            OperatingUserPassword = operatingUserPassword;
-        }
-
-        // Retrieves the Active Directory base organizational unit and optionally retrieves its descendants
-        public void Populate(bool retrieveDescendants = false, int? depth = null)
-        {
-            var organizationalUnit = GetOrganizationalUnit(null, retrieveDescendants, depth);
-            Name = organizationalUnit.Name;
-            OrganizationalUnits = organizationalUnit.OrganizationalUnits;
-            Path = organizationalUnit.Path;
-            Users = organizationalUnit.Users;
-        }
-
-        // Instance level methods that just call the static methods above
-        public bool AuthenticateUser(string userName, string password)
-        {
-            return AuthenticateUser(DomainName, OperatingUsername,
-                OperatingUserPassword, userName, password);
-        }
-
-        public UserPrincipal GetUserByUserName(string userName)
-        {
-            return GetUserByUserName(DomainName, OperatingUsername,
-                OperatingUserPassword, userName);
-        }
-
-        public GroupPrincipal GetGroupByName(string groupName)
-        {
-            return GetGroupByName(DomainName, OperatingUsername,
-                OperatingUserPassword, groupName);
-        }
-
-        public ActiveDirectoryOrganizationalUnit GetOrganizationalUnit(string path = null, bool retrieveDescendants = false,
-            int? depth = null)
-        {
-            return GetOrganizationalUnit(DomainName, OperatingUsername,
-                OperatingUserPassword, path, retrieveDescendants, depth);
-        }
-
-        public List<GroupPrincipal> GetGroupsByName(string filter = "*")
-        {
-            return GetGroupsByName(DomainName, OperatingUsername,
-                OperatingUserPassword, filter);
-        }
-
-        public List<string> GetGroupNames(string filter = "*")
-        {
-            return GetGroupNames(DomainName, OperatingUsername,
-                OperatingUserPassword, filter);
+            return string.Format("LDAP://{0}", domainName);
         }
     }
 }
